@@ -72,8 +72,9 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
         $autoTags = Typecho_Widget::widget('Widget_Options')->plugin('AutoTags');
         //插件启用,且未手动设置标签
         if($autoTags->isActive == 1 && !$contents['tags']) {
-
-            $postString = json_encode($contents['text']);
+            //str_replace("\n", '', trim(strip_tags($contents['text'])))
+            //过滤 html 标签等无用内容
+            $postString = json_encode(str_replace("\n", '', trim(strip_tags($contents['text']))));
             $ch = curl_init('http://api.bosonnlp.com/keywords/analysis?top_k=5');
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
             curl_setopt($ch, CURLOPT_POSTFIELDS,$postString);
