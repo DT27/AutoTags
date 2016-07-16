@@ -49,6 +49,11 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
                 '0' => '否',
             ),'1', _t('是否启用标签自动提取功能'), _t('自动提取功能在文章已存在标签时不生效.'));
         $form->addInput($isActive);
+		
+		
+        $bosonToken = new Typecho_Widget_Helper_Form_Element_Text('bosonNlpToken', null, null, _t('BosonNLP Token'), '请登录bosonnlp.com获取');
+        $form->addInput($bosonToken);
+		
     }
     
     /**
@@ -76,7 +81,7 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
         $text = str_replace("\n", '', trim(strip_tags(html_entity_decode($html))));
         $autoTags = Typecho_Widget::widget('Widget_Options')->plugin('AutoTags');
         //插件启用,且未手动设置标签
-        if($autoTags->isActive == 1 && !$contents['tags']) {
+        if($autoTags->isActive == 1 && !$contents['tags']) { 
             Typecho_Widget::widget('Widget_Metas_Tag_Admin')->to($tags);
             foreach($tags->stack as $tag){
                 $tagNames[] = $tag['name'];
@@ -92,9 +97,10 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
                 array(
                     'Content-Type: application/json',
                     'Accept: application/json',
-                    'X-Token: fpm1fDvA.5220.GimJs8QvViSK'
+                    'X-Token: '.$autoTags->bosonNlpToken
                 )
             );
+			echo $autoTags->bosonNlpToken;
             $result = curl_exec($ch);
             curl_close($ch);
             $result = json_decode($result);
@@ -118,7 +124,7 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
                     array(
                         'Content-Type: application/json',
                         'Accept: application/json',
-                        'X-Token: fpm1fDvA.5220.GimJs8QvViSK'
+                        'X-Token: '.$autoTags->bosonNlpToken
                     )
                 );
                 $result = curl_exec($ch);
