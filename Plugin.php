@@ -5,8 +5,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * 
  * @package AutoTags
  * @author DT27
- * @version 1.0.0
- * @link https://dt27.org
+ * @version 2.0.0
+ * @link https://dt27.cn/php/autotags-for-typecho/
  */
 class AutoTags_Plugin implements Typecho_Plugin_Interface
 {
@@ -49,6 +49,20 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
                 '0' => '否',
             ),'1', _t('是否启用标签自动提取功能'), _t('自动提取功能在文章已存在标签时不生效.'));
         $form->addInput($isActive);
+    
+        $api_key = new Typecho_Widget_Helper_Form_Element_Text(
+            'api_key', NULL, '',
+            _t('百度自然语言处理应用的API Ke'),
+            _t('<a href="https://ai.baidu.com/ai-doc/REFERENCE/Ck3dwjgn3">应用注册方法</a> 需开通<a href="https://console.bce.baidu.com/ai/#/ai/nlp/overview/index">服务列表</a>中的“文章标签”API接口（不是“关键词提取”），并<a href="https://console.bce.baidu.com/ai/?_=1652794810218&fromai=1#/ai/nlp/overview/resource/getFree">领取免费额度<a>')
+        );
+        $form->addInput($api_key);
+
+        $secret_key = new Typecho_Widget_Helper_Form_Element_Text(
+            'secret_key', NULL, '',
+            _t('百度自然语言处理应用的Secret Key'),
+            _t('')
+        );
+        $form->addInput($secret_key);
     }
     
     /**
@@ -68,11 +82,13 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
      */
     public static function write($contents, $edit)
     {
+		$title = $contents['title'];
         $html = $contents['text'];
         $isMarkdown = (0 === strpos($html, '<!--markdown-->'));
         if($isMarkdown){
             $html = Markdown::convert($html);
         }
+		//过滤 html 标签等无用内容
         $text = str_replace("\n", '', trim(strip_tags(html_entity_decode($html))));
         $autoTags = Typecho_Widget::widget('Widget_Options')->plugin('AutoTags');
         //插件启用,且未手动设置标签
@@ -81,55 +97,68 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
             foreach($tags->stack as $tag){
                 $tagNames[] = $tag['name'];
             }
-            //str_replace("\n", '', trim(strip_tags($contents['text'])))
-            //过滤 html 标签等无用内容
-            $postString = json_encode($text);
-            $ch = curl_init('http://api.bosonnlp.com/tag/analysis?space_mode=0&oov_level=0&t2s=0');
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-            curl_setopt($ch, CURLOPT_POSTFIELDS,$postString);
+            $postData = array(
+				'title' => $title,
+				'content' => $text
+			);
+            $ch = curl_init('https://aip.baidubce.com/rpc/2.0/nlp/v1/keyword?charset=UTF-8&access_token='.self::getAccessToken());
+            curl_setopt($ch, CURLOPT_TIMEOUT,10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,false);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER,true);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+            curl_setopt($ch, CURLOPT_POSTFIELDS,json_encode($postData));
             curl_setopt($ch, CURLOPT_HTTPHEADER,
                 array(
                     'Content-Type: application/json',
-                    'Accept: application/json',
-                    'X-Token: fpm1fDvA.5220.GimJs8QvViSK'
+                    'Accept: application/json'
                 )
             );
             $result = curl_exec($ch);
             curl_close($ch);
             $result = json_decode($result);
-            $ignoreTag = array('w', 'wkz', 'wky', 'wyz', 'wyy', 'wj', 'ww', 'wt', 'wd', 'wf', 'wn', 'wm', 'ws', 'wp', 'wb', 'wh', 'email', 'tel', 'id', 'ip', 'url', 'o', 'y', 'u', 'uzhe', 'ule', 'ugou', 'ude', 'usou', 'udeng', 'uyy', 'udh', 'uzhi', 'ulian', 'c', 'p', 'pba', 'pbei', 'd', 'dl', 'q', 'm', 'r', 'z', 'b', 'bl', 'a', 'ad', 'an', 'al', 'v', 'vd', 'vshi', 'vyou', 'vl', 'f', 's', 't', 'nl');
+            $items = $result->items;
+            if(count($items)<=0){
+				return $contents;
+            }
             $sourceTags = array();
-            foreach($result[0]->tag as $key => $tag){
-                if(!in_array($tag, $ignoreTag)){
-                    if(in_array($result[0]->word[$key], $tagNames)){
-                        if(in_array($result[0]->word[$key], $sourceTags)) continue;
-                        $sourceTags[] = $result[0]->word[$key];
-                    }
-                }
+            $i = 0;
+            foreach($items as $key => $tag){
+                if($i>6) break;
+                $i++;
+				if(in_array($tag->tag, $tagNames)){
+					if(in_array($tag->tag, $sourceTags)) continue;
+					$sourceTags[] = $tag->tag;
+				}else{
+				    $sourceTags[] = $tag->tag;
+				}
             }
             $contents['tags'] = implode(',', array_unique($sourceTags));
-            if(count($contents['tags'])<3){
-                $ch = curl_init('http://api.bosonnlp.com/keywords/analysis?top_k=5');
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-                curl_setopt($ch, CURLOPT_POSTFIELDS,$postString);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER,true);
-                curl_setopt($ch, CURLOPT_HTTPHEADER,
-                    array(
-                        'Content-Type: application/json',
-                        'Accept: application/json',
-                        'X-Token: fpm1fDvA.5220.GimJs8QvViSK'
-                    )
-                );
-                $result = curl_exec($ch);
-                curl_close($ch);
-                $result = json_decode($result);
-                foreach($result as $re){
-                    $a[] = $re[1];
-                }
-                $contents['tags'] = $contents['tags']?$contents['tags'].','.implode(',', $a):implode(',', $a);
-            }
         }
         return $contents;
+    }
+    /**
+     * 百度平台授权
+     */
+    private static function getAccessToken()
+    {
+        $autoTags = Typecho_Widget::widget('Widget_Options')->plugin('AutoTags');
+		$curl = curl_init();
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => "https://aip.baidubce.com/oauth/2.0/token?client_id=".$autoTags->api_key."&client_secret=".$autoTags->secret_key."&grant_type=client_credentials",
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER  => false,
+            CURLOPT_SSL_VERIFYHOST  => false,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => array(
+                'Content-Type: application/json',
+                'Accept: application/json'
+            ),
+        ));
+        $response = curl_exec($curl);
+        curl_close($curl);
+        $response = json_decode($response);
+		return $response->access_token;
     }
 }
