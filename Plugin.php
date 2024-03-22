@@ -52,7 +52,7 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
     
         $api_key = new Typecho_Widget_Helper_Form_Element_Text(
             'api_key', NULL, '',
-            _t('百度自然语言处理应用的API Ke'),
+            _t('百度自然语言处理应用的API Key'),
             _t('<a href="https://ai.baidu.com/ai-doc/REFERENCE/Ck3dwjgn3">应用注册方法</a> 需开通<a href="https://console.bce.baidu.com/ai/#/ai/nlp/overview/index">服务列表</a>中的“文章标签”API接口（不是“关键词提取”），并<a href="https://console.bce.baidu.com/ai/?_=1652794810218&fromai=1#/ai/nlp/overview/resource/getFree">领取免费额度<a>')
         );
         $form->addInput($api_key);
