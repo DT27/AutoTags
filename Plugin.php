@@ -59,9 +59,9 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
         $form->addInput($api_key);
 
         $api_model = new Typecho_Widget_Helper_Form_Element_Text(
-            'api_model', NULL, 'deepseek/deepseek-chat:free',
+            'api_model', NULL, 'minimax/minimax-m2.5:free',
             _t('调用ai模型'),
-            _t('建议使用deepseek/deepseek-chat:free模型，免费。可用模型列表：<a href="https://openrouter.ai/models" target="_blank">https://openrouter.ai/models</a>')
+            _t('免费模型列表：<a href="https://openrouter.ai/models?fmt=cards&max_price=0&order=newest&output_modalities=text" target="_blank">https://openrouter.ai/models</a>，若网站日志报错可能是访问人数过多，可以多换几个试试。')
         );
         $form->addInput($api_model);
     }
@@ -91,6 +91,8 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
         }
 		//过滤 html 标签等无用内容
         $text = str_replace("\n", '', trim(strip_tags(html_entity_decode($html))));
+        // 1. 截取正文前 800 字，防止 Token 过长导致模型拒答
+        $text = mb_substr($text, 0, 800);
         $autoTags = Typecho_Widget::widget('Widget_Options')->plugin('AutoTags');
         //插件启用,且未手动设置标签
         if($autoTags->isActive == 1 && !$contents['tags']) {
@@ -100,7 +102,7 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
             //}
             $endpoint = 'https://openrouter.ai/api/v1/chat/completions';
             // 请求提示词
-            $prompt = "Extract 1-5 relevant tags that summarize the main topics of the following article title and content. Return the tags as a comma-separated list. Return only tags, no explanation or reasoning or any other things:**Title**: $title **Content**: $text";
+            $prompt = "请为这篇文章提取1到5个关键词作为标签。仅返回标签本身，多个标签用英文逗号分隔，不要包含任何解释。标题：{$title}；内容：{$text}";
             $data = [
                 'model' => $autoTags->api_model,
                 'messages' => [
@@ -110,7 +112,7 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
                     ]
                 ],
                 'stream' => false, // 非流式响应
-                'response_format' => ['type' => 'json_object'] // 要求 JSON 格式（若模型支持）
+                //'response_format' => ['type' => 'json_object'] // 要求 JSON 格式（若模型支持）
             ];
 
             // 初始化 cURL
@@ -129,7 +131,7 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
             $response = curl_exec($ch);
             // 检查错误
             if (curl_errno($ch)) {
-                echo 'cURL Error: ' . curl_error($ch);
+                error_log('cURL Error: ' . curl_error($ch));
                 curl_close($ch);
                 exit;
             }
@@ -145,12 +147,12 @@ class AutoTags_Plugin implements Typecho_Plugin_Interface
                     //echo "Extracted Tags (Array):\n";
                     $contents['tags']=implode(',', array_unique($tagsArray));
                 } else {
-                    echo "Error: No tags returned in response.\n";
+                    error_log("Error: No tags returned in response.\n");
                     return $contents;
                 }
             } else {
-                echo "HTTP Error: " . $httpCode . "\n";
-                echo "Response: " . $response . "\n";
+                error_log("HTTP Error: " . $httpCode . "\n");
+                error_log("Response: " . $response . "\n");
             }
         }
         return $contents;
