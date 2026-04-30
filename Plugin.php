@@ -5,7 +5,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * 
  * @package AutoTags
  * @author DT27
- * @version 3.0.0
+ * @version 3.0.1
  * @link https://dt27.cn/php/autotags-for-typecho/
  */
 class AutoTags_Plugin implements Typecho_Plugin_Interface
